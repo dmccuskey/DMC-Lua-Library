@@ -514,10 +514,9 @@ end
 --- Write a encoded char array into buf
 function ByteArray:writeBuf(__s)
 	assert( type(__s) == 'string', "must be string" )
-	-- for i=1,#__s do
-	-- 	self:writeRawByte(__s:sub(i))
-	-- end
-	self._buf = __s
+	for i=1,#__s do
+		self:writeRawByte(__s:sub(i,i))
+	end
 	return self
 end
 
