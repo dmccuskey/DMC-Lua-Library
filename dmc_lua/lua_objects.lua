@@ -8,7 +8,7 @@
 
 The MIT License (MIT)
 
-Copyright (c) 2014 David McCuskey
+Copyright (c) 2014-2015 David McCuskey
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -33,33 +33,27 @@ SOFTWARE.
 
 
 --====================================================================--
--- DMC Lua Library : Lua Objects
+--== DMC Lua Library : Lua Objects
 --====================================================================--
 
 
 -- Semantic Versioning Specification: http://semver.org/
 
-local VERSION = "0.1.1"
+local VERSION = "1.1.4"
 
-
---====================================================================--
--- Imports
-
-local Utils = require 'lua_utils'
 
 
 --====================================================================--
--- Setup, Constants
+--== Imports
 
--- the name of the constructor method can be changed
--- to work with other OO frameworks
---
-local CONSTRUCTOR_FUNC_NAME = 'new'
 
-local function setConstructorName( name )
-	assert( type(name)=='string', "expected string for constructor name" )
-	CONSTRUCTOR_FUNC_NAME = name
-end
+-- none
+
+
+
+--====================================================================--
+--== Setup, Constants
+
 
 -- cache globals
 local assert, type, rawget, rawset = assert, type, rawget, rawset
@@ -68,102 +62,220 @@ local getmetatable, setmetatable = getmetatable, setmetatable
 local tinsert = table.insert
 local tremove = table.remove
 
+-- table for copies from lua_utils
+local Utils = {}
+
+-- forward declare
+local ClassBase
+
+
 
 --====================================================================--
--- Class Support Functions
+--== Class Support Functions
 
--- printObject()
--- print out the keys contained within a table.
--- by default, does not process items with underscore '_'
+
+--== Start: copy from lua_utils ==--
+
+-- extend()
+-- Copy key/values from one table to another
+-- Will deep copy any value from first table which is itself a table.
 --
--- @param table the table (object) to print
--- @param include a list of names to include
--- @param exclude a list of names to exclude
+-- @param fromTable the table (object) from which to take key/value pairs
+-- @param toTable the table (object) in which to copy key/value pairs
+-- @return table the table (object) that received the copied items
 --
-local function printObject( table, include, exclude, params )
-	local indent = ""
-	local step = 0
-	local include = include or {}
-	local exclude = exclude or {}
-	local params = params or {}
-	local options = {
-		limit = 10,
-	}
-	opts = Utils.extend( params, options )
+function Utils.extend( fromTable, toTable )
 
-	--print("Printing object table =============================")
-	function _print( t, ind, s )
+	if not fromTable or not toTable then
+		error( "table can't be nil" )
+	end
+	function _extend( fT, tT )
 
-		-- limit number of rounds
-		if s > options.limit then return end
+		for k,v in pairs( fT ) do
 
-		for k, v in pairs( t ) do
-			local ok_to_process = true
+			if type( fT[ k ] ) == "table" and
+				type( tT[ k ] ) == "table" then
 
-			if Utils.propertyIn( include, k ) then
-				ok_to_process = true
-			elseif type( t[k] ) == "function" or
-				Utils.propertyIn( exclude, k ) or
-				type( k ) == "string" and k:sub(1,1) == '_' then
-				ok_to_process = false
+				tT[ k ] = _extend( fT[ k ], tT[ k ] )
+
+			elseif type( fT[ k ] ) == "table" then
+				tT[ k ] = _extend( fT[ k ], {} )
+
+			else
+				tT[ k ] = v
 			end
-
-			if ok_to_process then
-
-				if type( t[ k ] ) == "table" then
-					local  o = t[ k ]
-					local address = tostring( o )
-					local items = #o
-					print ( ind .. k .. " --> " .. address .. " w " .. items .. " items" )
-					_print( t[ k ], ( ind .. "  " ), ( s + 1 ) )
-
-				else
-					if type( v ) == "string" then
-						print ( ind ..  k .. " = '" .. v .. "'" )
-					else
-						print ( ind ..  k .. " = " .. tostring( v ) )
-					end
-
-				end
-			end
-
 		end
+
+		return tT
 	end
 
-	-- start printing process
-	_print( table, indent, step + 1 )
+	return _extend( fromTable, toTable )
+end
 
+--== End: copy from lua_utils ==--
+
+
+
+
+-- registerCtorName
+-- add names for the constructor
+--
+local function registerCtorName( name, class )
+	class = class or ClassBase
+	--==--
+	assert( type( name ) == 'string', "ctor name should be string" )
+	assert( class.is_class, "Class is not is_class" )
+
+	class[ name ] = class.__ctor__
+	return class[ name ]
+end
+
+-- registerDtorName
+-- add names for the destructor
+--
+local function registerDtorName( name, class )
+	class = class or ClassBase
+	--==--
+	assert( type( name ) == 'string', "dtor name should be string" )
+	assert( class.is_class, "Class is not is_class" )
+
+	class[ name ] = class.__dtor__
+	return class[ name ]
 end
 
 
--- indexFunc()
--- override the normal Lua lookup functionality to allow
--- property getter functions
+
+--[[
+obj:superCall( 'string', ... )
+obj:superCall( Class, 'string', ... )
+--]]
+
+-- superCall()
+-- function to intelligently find methods in object hierarchy
 --
--- @param t object table
--- @param k key
---
-local function indexFunc( t, k )
+local function superCall( self, ... )
+	local args = {...}
+	local arg1 = args[1]
+	assert( type(arg1)=='table' or type(arg1)=='string', "superCall arg not table or string" )
+	--==--
+	-- pick off arguments
+	local parent_lock, method, params
 
-	local o, val
+	if type(arg1) == 'table' then
+		parent_lock = tremove( args, 1 )
+		method = tremove( args, 1 )
+	else
+		method = tremove( args, 1 )
+	end
+	params = args
 
-	--== do key lookup in different places on object
+	local self_dmc_super = self.__dmc_super
+	local super_flag = ( self_dmc_super ~= nil )
+	local result = nil
 
-	-- check for key in getters table
-	o = rawget( t, '__getters' ) or {}
-	if o[k] then return o[k](t) end
+	-- finds method name in class hierarchy
+	-- returns found class or nil
+	-- @params classes list of Classes on which to look, table/list
+	-- @params name name of method to look for, string
+	-- @params lock Class object with which to constrain searching
+	--
+	function findMethod( classes, name, lock )
+		local cls = nil
+		for _, class in ipairs( classes ) do
+			if not lock or class == lock then
+				if rawget( class, name ) then
+					cls = class
+					break
+				else
+					-- check parents for method
+					cls = findMethod( class.__parents, name )
+					if cls then break end
+				end
+			end
+		end
+		return cls
+	end
 
-	-- check for key directly on object
-	val = rawget( t, k )
-	if val ~= nil then return val end
+	local c, s  -- class, super
 
-	-- check OO hierarchy
-	o = rawget( t, '__parent' )
-	if o then val = o[k] end
-	if val ~= nil then return val end
+	-- structure in which to save our place
+	-- in case superCall() is invoked again
+	--
+	if self_dmc_super == nil then
+		self.__dmc_super = {} -- a stack
+		self_dmc_super = self.__dmc_super
+		-- find out where we are in hierarchy
+		s = findMethod( { self.__class }, method )
+		tinsert( self_dmc_super, s )
+	end
 
-	return nil
+	-- pull Class from stack and search for method on Supers
+	-- look for method on supers
+	-- call method if found
+	--
+	c = self_dmc_super[ # self_dmc_super ]
+	s = findMethod( c.__parents, method, parent_lock )
+	if s then
+		tinsert( self_dmc_super, s )
+		result = s[method]( self, unpack( args ) )
+		tremove( self_dmc_super, # self_dmc_super )
+	end
+
+	-- this is the first iteration and last
+	-- so clean up callstack, etc
+	--
+	if super_flag == false then
+		parent_lock = nil
+		tremove( self_dmc_super, # self_dmc_super )
+		self.__dmc_super = nil
+	end
+
+	return result
 end
+
+
+
+-- initializeObject
+-- this is the beginning of object initialization
+-- either Class or Instance
+-- this is what calls the parent constructors, eg new()
+-- called from newClass(), __create__(), __call()
+--
+-- @params obj the object context
+-- @params params table with :
+-- set_isClass = true/false
+-- data contains {...}
+--
+local function initializeObject( obj, params )
+	params = params or {}
+	--==--
+	assert( params.set_isClass ~= nil, "initializeObject requires paramter 'set_isClass'" )
+
+	local is_class = params.set_isClass
+	local args = params.data or {}
+
+	-- set Class/Instance flag
+	obj.__is_class = params.set_isClass
+
+	-- call Parent constructors, if any
+	-- do in reverse
+	--
+	local parents = obj.__parents
+	for i = #parents, 1, -1 do
+		local parent = parents[i]
+
+		rawset( obj, '__parent_lock', parent )
+		if parent.__new__ then
+			parent.__new__( obj, unpack( args ) )
+		end
+
+	end
+	rawset( obj, '__parent_lock', nil )
+
+	return obj
+end
+
+
 
 -- newindexFunc()
 -- override the normal Lua lookup functionality to allow
@@ -190,475 +302,320 @@ local function newindexFunc( t, k, v )
 
 end
 
--- _bless()
--- sets up the inheritance chain via metatables
--- creates object to bless if one isn't provided
+
+
+-- multiindexFunc()
+-- override the normal Lua lookup functionality to allow
+-- property getter functions
 --
--- @param base base class object (optional)
--- @param obj object to bless (optional)
--- @return a blessed object
+-- @param t object table
+-- @param k key
 --
-local function bless( base, obj )
-	local o = obj or {}
-	local mt = {
-		__index = indexFunc,
-		__newindex = newindexFunc,
-	}
-	if base and base[ CONSTRUCTOR_FUNC_NAME ] and type(base[ CONSTRUCTOR_FUNC_NAME])=='function' then
-		mt.__call = base[ CONSTRUCTOR_FUNC_NAME ]
+local function multiindexFunc( t, k )
+
+	local o, val
+
+	--== do key lookup in different places on object
+
+	-- check for key in getters table
+	o = rawget( t, '__getters' ) or {}
+	if o[k] then return o[k](t) end
+
+	-- check for key directly on object
+	val = rawget( t, k )
+	if val ~= nil then return val end
+
+	-- check OO hierarchy
+	-- check Parent Lock else all of Parents
+	--
+	o = rawget( t, '__parent_lock' )
+	if o then
+		if o then val = o[k] end
+		if val ~= nil then return val end
+	else
+		local par = rawget( t, '__parents' )
+		for _, o in ipairs( par ) do
+			if o[k] ~= nil then
+				val = o[k]
+				break
+			end
+		end
+		if val ~= nil then return val end
 	end
+
+	return nil
+end
+
+
+
+-- blessObject()
+-- create new object, setup with Lua OO aspects, dmc-style aspects
+-- @params inheritance table of supers/parents (dmc-style objects)
+-- @params params
+-- params.object
+-- params.set_isClass
+--
+local function blessObject( inheritance, params )
+	params = params or {}
+	params.object = params.object or {}
+	params.set_isClass = params.set_isClass == true and true or false
+	--==--
+	local o = params.object
+	local o_id = tostring(o)
+	local mt = {
+		__index = multiindexFunc,
+		__newindex = newindexFunc,
+		__tostring = function(obj)
+			return obj:__tostring__(o_id)
+		end,
+		__call = function( cls, ... )
+			return cls:__ctor__( ... )
+		end
+	}
 	setmetatable( o, mt )
 
-	-- create lookup tables - parent, setter, getter
-	o.__parent = base
+	-- add Class property, access via getters:supers()
+	o.__parents = inheritance
+
+	-- create lookup tables - setters, getters
 	o.__setters = {}
 	o.__getters = {}
-	if base then
-		-- copy down all getters/setters of parent
-		o.__getters = Utils.extend( base.__getters, o.__getters )
-		o.__setters = Utils.extend( base.__setters, o.__setters )
+
+	-- copy down all getters/setters of parents
+	for _, cls in ipairs( inheritance ) do
+		if cls.__getters then
+			o.__getters = Utils.extend( cls.__getters, o.__getters )
+		end
+		if cls.__setters then
+			o.__setters = Utils.extend( cls.__setters, o.__setters )
+		end
 	end
 
 	return o
 end
 
 
+
+local function newClass( inheritance, params )
+	inheritance = inheritance or {}
+	params = params or {}
+	params.set_isClass = true
+	params.name = params.name or "<unnamed class>"
+	--==--
+	assert( type( inheritance ) == 'table', "first parameter should be nil, a Class, or a list of Classes" )
+
+	-- wrap single-class into table list
+	-- testing for DMC-Style objects
+	-- TODO: see if we can test for other Class libs
+	--
+	if inheritance.is_class == true then
+		inheritance = { inheritance }
+	elseif ClassBase and #inheritance == 0 then
+		-- add default base Class
+		tinsert( inheritance, ClassBase )
+	end
+
+	local o = blessObject( inheritance, {} )
+
+	initializeObject( o, params )
+
+	-- add Class property, access via getters:class()
+	o.__class = o
+
+	-- add Class property, access via getters:NAME()
+	o.__name = params.name
+
+	return o
+
+end
+
+
+-- backward compatibility
+--
 local function inheritsFrom( baseClass, options, constructor )
-
-	local constructor = constructor
-	local o
-
-	-- flag to indicate this is a subclass object
-	-- will be set in the regular constructor
-	options = options or {}
-	options.__set_intermediate = true
-
-	-- get default constructor
-	if baseClass and constructor == nil then
-		constructor = baseClass[ CONSTRUCTOR_FUNC_NAME ]
-	end
-
-	-- create our class object
-	if baseClass == nil or constructor == nil then
-		o = bless( baseClass )
-	else
-		o = constructor( baseClass, options )
-	end
+	baseClass = baseClass == nil and baseClass or { baseClass }
+	return newClass( baseClass, options )
+end
 
 
-	--== Setup some class-type functions
 
-	-- Return the class object of the instance
-	function o:class()
-		return o
-	end
+--====================================================================--
+--== Base Class
+--====================================================================--
 
-	-- Return the super class object of the instance
-	function o:superClass()
-		return baseClass
-	end
-	-- Return true if the caller is an instance of theClass
-	function o:isa( theClass )
-		local b_isa = false
 
-		local cur_class = o
+ClassBase = newClass( nil, { name="Class Class" } )
 
-		while ( nil ~= cur_class ) and ( false == b_isa ) do
-			if cur_class == theClass then
-				 b_isa = true
-			else
-				 cur_class = cur_class:superClass()
-			end
-		end
-
-		return b_isa
-	end
-
+-- __ctor__ method
+-- called by 'new()' and other registrations
+--
+function ClassBase:__ctor__( ... )
+	local params = {
+		data = {...},
+		set_isClass = false
+	}
+	--==--
+	local o = blessObject( { self.__class }, params )
+	initializeObject( o, params )
 
 	return o
 end
 
-
-
---====================================================================--
--- Base Class
---====================================================================--
-
-local ClassBase = inheritsFrom( nil )
-ClassBase.NAME = "Base Class"
-
-ClassBase._PRINT_INCLUDE = {}
-ClassBase._PRINT_EXCLUDE = { '__dmc_super' }
-
-
--- new()
--- class constructor
+-- __dtor__ method
+-- called by 'destroy()' and other registrations
 --
-function ClassBase:new( options )
-	return self:_bless()
+function ClassBase:__dtor__()
+	self:__destroy__()
 end
 
 
--- _bless()
--- interface to generic bless()
---
-function ClassBase:_bless( obj )
-	return bless( self, obj )
+function ClassBase:__new__( ... )
+	return self
 end
 
 
--- superCall( name, ... )
--- call a method on an object's parent
---
-function ClassBase:superCall( name, ... )
-	-- print( 'ClassBase:supercall', name, self.NAME )
+function ClassBase:__tostring__( id )
+	return tostring(self.NAME) .. " " .. id
+end
 
-	local c, s 		-- class, super
-	local result
-	local self_dmc_super = self.__dmc_super
-	local super_flag = self_dmc_super
 
-	-- finds method in class hierarchy
-	-- returns found class or nil
-	function findMethod( class, method )
-		while class do
-			if rawget( class, method ) then break end
-			class = class:superClass()
+function ClassBase:__destroy__()
+end
+
+
+function ClassBase.__getters:NAME()
+	return self.__name
+end
+
+
+function ClassBase.__getters:class()
+	return self.__class
+end
+
+function ClassBase.__getters:supers()
+	return self.__parents
+end
+
+
+function ClassBase.__getters:is_class()
+	return self.__is_class
+end
+
+-- deprecated
+function ClassBase.__getters:is_intermediate()
+	return self.__is_class
+end
+
+function ClassBase.__getters:is_instance()
+	return not self.__is_class
+end
+
+
+function ClassBase:isa( the_class )
+
+	local isa = false
+	local cur_class = self.class
+
+	-- test self
+	if cur_class == the_class then
+		isa = true
+
+	-- test parents
+	else
+		local parents = self.__parents
+		for i=1, #parents do
+			isa = parents[i]:isa( the_class )
+			if isa == true then break end
 		end
-		return class
 	end
 
-	-- structure in which to save our place
-	-- in case supercall is invoked again
-	if self_dmc_super == nil then
-		self.__dmc_super = {} -- a stack
-		self_dmc_super = self.__dmc_super
-		-- here we start with our class
-		s = findMethod( self:class(), name )
-		tinsert( self_dmc_super, s )
-	end
-
-	c = self_dmc_super[ # self_dmc_super ]
-	-- here we start with the super class
-	s = findMethod( c:superClass(), name )
-	if s then
-		tinsert( self_dmc_super, s )
-		result = s[name]( self, unpack( arg ) )
-		tremove( self_dmc_super, # self_dmc_super )
-	end
-
-	-- here we're the first and last on callstack, so clean up
-	if super_flag == nil then
-		tremove( self_dmc_super, # self_dmc_super )
-		self.__dmc_super = nil
-	end
-
-	return result
+	return isa
 end
 
 
--- print
+-- optimize()
+-- move super class methods to object
 --
-function ClassBase:print( include, exclude )
-	local include = include or self._PRINT_INCLUDE
-	local exclude = exclude or self._PRINT_EXCLUDE
-
-	printObject( self, include, exclude )
-end
-
-
 function ClassBase:optimize()
 
-	function _optimize( obj, class )
+	function _optimize( obj, inheritance )
 
-		-- climb up the hierarchy
-		if not class then return end
-		_optimize( obj, class:superClass() )
+		if not inheritance or #inheritance == 0 then return end
 
-		-- make local references to all functions
-		for k,v in pairs( class ) do
-			if type( v ) == "function" then
-				obj[ k ] = v
+		for i=#inheritance,1,-1 do
+			local parent = inheritance[i]
+
+			-- climb up the hierarchy
+			_optimize( obj, parent.__parents )
+
+			-- make local references to all functions
+			for k,v in pairs( parent ) do
+				if type( v ) == 'function' then
+					obj[ k ] = v
+				end
 			end
 		end
 
 	end
 
-	_optimize( self, self:class() )
+	_optimize( self, { self.__class } )
 end
 
+-- deoptimize()
+-- remove super class (optimized) methods from object
+--
 function ClassBase:deoptimize()
 	for k,v in pairs( self ) do
-		if type( v ) == "function" then
+		if type( v ) == 'function' then
 			self[ k ] = nil
 		end
 	end
 end
 
 
--- TODO: method can be a string or method reference
-function ClassBase:createCallback( method )
-	if method == nil then
-		error( "ERROR: missing method in createCallback()", 2 )
-	end
-	return function( ... )
-		return method( self, ... )
-	end
-end
+
+-- Setup Class Properties (function references)
+
+registerCtorName( 'new', ClassBase )
+registerDtorName( 'destroy', ClassBase )
+ClassBase.superCall = superCall
+
 
 
 
 --====================================================================--
---== Object Base Class
+--== Lua Objects Exports
 --====================================================================--
 
 
-local ObjectBase = inheritsFrom( ClassBase )
-ObjectBase.NAME = "Object Base"
-
-
---====================================================================--
---== Class Support Functions
-
--- callback is either function or object (table)
--- creates listener lookup key given event name and handler
+-- makeNewClassGlobal
+-- modifies the global namespace with newClass()
+-- add or remove
 --
-local function createEventListenerKey( e_name, handler )
-	return e_name .. "::" .. tostring( handler )
-end
-
-
---====================================================================--
---== Constructor
-
--- new()
--- this method drives the initialization flow for DMC-style objects
--- typically you won't override this
---
-function ObjectBase:new( params )
-	params = params or {}
-	params.__set_intermediate = params.__set_intermediate == true and params.__set_intermediate or false
-	--==--
-
-	local o = self:_bless()
-
-	-- set flag if this is an Intermediate class
-	o.is_intermediate = params.__set_intermediate
-	params.__set_intermediate = nil
-
-	o:_init( params )
-
-	-- skip these if we're an intermediate class (eg, subclass)
-	if rawget( o, 'is_intermediate' ) == false then
-		o:_initComplete()
-	end
-
-	return o
-end
-
-
---======================================================--
--- Start: Setup Lua Objects
-
--- _init()
--- initialize the object - setting the view
---
-function ObjectBase:_init( options )
-	-- OVERRIDE THIS
-	--== Create Properties ==--
-	self.__event_listeners = {} -- holds event listeners
-	--[[
-	event listeners key'd by:
-	* <event name>::<function>
-	* <event name>::<object>
-	{
-		<event name> = {
-			'event::function' = func,
-			'event::object' = object (table)
-		}
-	}
-	--]]
-	--== Object References ==--
-end
--- _undoInit()
--- remove items added during _init()
---
-function ObjectBase:_undoInit( options )
-	-- OVERRIDE THIS
-	self.__event_listeners = nil
-end
-
-
--- _initComplete()
--- any setup after object is done being created
---
-function ObjectBase:_initComplete()
-	-- OVERRIDE THIS
-end
--- _undoInitComplete()
--- remove any items added during _initComplete()
---
-function ObjectBase:_undoInitComplete()
-	-- OVERRIDE THIS
-end
-
--- END: Setup Lua Objects
---======================================================--
-
-
---====================================================================--
---== Public Methods
-
--- dispatchEvent( event, data, params )
---
-function ObjectBase:dispatchEvent( e_type, data, params )
-	-- print( "ObjectBase:dispatchEvent", e_type );
-	self:_dispatchEvent( self:_buildDmcEvent( e_type, data, params ) )
-end
-
-
--- addEventListener()
---
-function ObjectBase:addEventListener( e_name, listener )
-	-- print( "ObjectBase:addEventListener", e_name, listener );
-
-	-- Sanity Check
-
-	if not e_name or type(e_name)~='string' then
-		error( "ERROR addEventListener: event name must be string", 2 )
-	end
-	if not listener and not Utils.propertyIn( {'function','table'}, type(listener) ) then
-		error( "ERROR addEventListener: listener must be a function or object", 2 )
-	end
-
-	-- Processing
-
-	local events, listeners, key
-
-	events = self.__event_listeners
-	if not events[ e_name ] then events[ e_name ] = {} end
-	listeners = events[ e_name ]
-
-	key = createEventListenerKey( e_name, listener )
-	if listeners[ key ] then
-		print("WARNING:: ObjectBase:addEventListener, already have listener")
+local function makeNewClassGlobal( is_global )
+	is_global = is_global~=nil and is_global or true
+	if _G.newClass ~= nil then
+		print( "WARNING: newClass exists in global namespace" )
+	elseif is_global == true then
+		_G.newClass = newClass
 	else
-		listeners[ key ] = listener
-	end
-
-end
-
--- removeEventListener()
---
-function ObjectBase:removeEventListener( e_name, listener )
-	-- print( "ObjectBase:removeEventListener" );
-
-	local listeners, key
-
-	listeners = self.__event_listeners[ e_name ]
-	if not listeners or type(listeners)~= 'table' then
-		print("WARNING:: ObjectBase:removeEventListener, no listeners found")
-	end
-
-	key = createEventListenerKey( e_name, listener )
-
-	if not listeners[ key ] then
-		print("WARNING:: ObjectBase:removeEventListener, listener not found")
-	else
-		listeners[ key ] = nil
-	end
-
-end
-
-
--- removeSelf()
---
--- this method drives the destruction flow for DMC-style objects
--- typically, you won't override this
---
-function ObjectBase:removeSelf()
-	-- print( "ObjectBase:removeSelf" );
-
-	-- skip these if we're an intermediate class (eg, subclass class)
-	if rawget( self, 'is_intermediate' ) == false then
-		self:_undoInitComplete()
-	end
-
-	self:_undoInit()
-end
-
-
---====================================================================--
---== Private Methods
-
-function ObjectBase:_buildDmcEvent( e_type, data, params )
-	params = params or {}
-	if params.merge == nil then params.merge = true end
-	--==--
-	local e
-
-	if params.merge and type( data ) == 'table' then
-		e = data
-		e.name = self.EVENT
-		e.type = e_type
-		e.target = self
-
-	else
-		e = {
-			name=self.EVENT,
-			type=e_type,
-			target=self,
-			data=data
-		}
-
-	end
-	return e
-end
-
-
-function ObjectBase:_dispatchEvent( event )
-	-- print( "ObjectBase:_dispatchEvent", event.name );
-	local e_name, listeners
-
-	e_name = event.name
-	if not e_name or not self.__event_listeners[ e_name ] then return end
-
-	listeners = self.__event_listeners[ e_name ]
-	if type(listeners)~='table' then return end
-
-	for k, callback in pairs( listeners ) do
-
-		if type( callback) == 'function' then
-		 	callback( event )
-
-		elseif type( callback )=='table' and callback[e_name] then
-			local method = callback[e_name]
-			method( callback, event )
-
-		else
-			print( "WARNING: ObjectBase dispatchEvent", e_name )
-
-		end
+		_G.newClass = nil
 	end
 end
 
-
---====================================================================--
---== Event Handlers
-
--- none
-
-
-
-
---====================================================================--
--- Lua Objects Exports
---====================================================================--
+makeNewClassGlobal() -- start it off
 
 
 return {
-	setConstructorName = setConstructorName,
-	inheritsFrom = inheritsFrom,
-	ClassBase = ClassBase,
-	ObjectBase = ObjectBase
+	__version=VERSION,
+	__superCall=superCall, -- for testing
+	setNewClassGlobal=makeNewClassGlobal,
+
+	registerCtorName=registerCtorName,
+	registerDtorName=registerDtorName,
+
+	inheritsFrom=inheritsFrom, -- backwards compatibility
+	newClass=newClass,
+
+	Class=ClassBase
 }

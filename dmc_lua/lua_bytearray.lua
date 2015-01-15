@@ -1,544 +1,357 @@
+--====================================================================--
+-- dmc_lua/bytearray.lua
+--
+-- Documentation: http://docs.davidmccuskey.com/
+--====================================================================--
+
 --[[
-Serialzation bytes stream like ActionScript flash.utils.ByteArray.
-It depends on lpack.
-A sample: https://github.com/zrong/lua#ByteArray
 
-@see http://underpop.free.fr/l/lua/lpack/
-@see http://help.adobe.com/en_US/FlashPlatform/reference/actionscript/3/flash/utils/ByteArray.html
-@author zrong(zengrong.net)
+The MIT License (MIT)
 
-Creation 2013-11-14
-Last Modification 2014-01-01
-]]
+Copyright (c) 2014- 2015 David McCuskey
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--]]
+
+
+
+--====================================================================--
+--== DMC Lua Library: Lua Byte Array
+--====================================================================--
+
+
+-- Semantic Versioning Specification: http://semver.org/
+
+local VERSION = "0.2.0"
+
+
+
+--====================================================================--
+--== Imports
+
 
 local Error = require 'lua_bytearray.exceptions'
+local Objects = require 'lua_objects'
 
-function iskindof(obj, classname)
-    local t = type(obj)
-    local mt
-    if t == "table" then
-        mt = getmetatable(obj)
-    elseif t == "userdata" then
-        mt = tolua.getpeer(obj)
-    end
+local has_pack, PackByteArray = pcall( require, 'lua_bytearray.pack_bytearray' )
 
-    while mt do
-        if mt.__cname == classname then
-            return true
-        end
-        mt = mt.super
-    end
 
-    return false
-end
 
-function class(classname, super)
-    local superType = type(super)
-    local cls
+--====================================================================--
+--== Setup, Constants
 
-    if superType ~= "function" and superType ~= "table" then
-        superType = nil
-        super = nil
-    end
 
-    if superType == "function" or (super and super.__ctype == 1) then
-        -- inherited from native C++ Object
-        cls = {}
+-- setup some aliases to make code cleaner
+local newClass = Objects.newClass
+local ObjectBase = Objects.ObjectBase
+local Class = Objects.Class
 
-        if superType == "table" then
-            -- copy fields from super
-            for k,v in pairs(super) do cls[k] = v end
-            cls.__create = super.__create
-            cls.super    = super
-        else
-            cls.__create = super
-            cls.ctor = function() end
-        end
 
-        cls.__cname = classname
-        cls.__ctype = 1
-
-        function cls.new(...)
-            local instance = cls.__create(...)
-            -- copy fields from class to native object
-            for k,v in pairs(cls) do instance[k] = v end
-            instance.class = cls
-            instance:ctor(...)
-            return instance
-        end
-
-    else
-        -- inherited from Lua Object
-        if super then
-            cls = {}
-            setmetatable(cls, {__index = super})
-            cls.super = super
-        else
-            cls = {ctor = function() end}
-        end
-
-        cls.__cname = classname
-        cls.__ctype = 2 -- lua
-        cls.__index = cls
-
-        function cls.new(...)
-            local instance = setmetatable({}, cls)
-            instance.class = cls
-            instance:ctor(...)
-            return instance
-        end
-    end
-
-    return cls
+local Parents = { Class }
+if has_pack then
+	table.insert( Parents, PackByteArray )
 end
 
 
+local Utils = {}
 
-local ByteArray = class( "ByteArray" )
 
-ByteArray.ENDIAN_LITTLE = "ENDIAN_LITTLE"
-ByteArray.ENDIAN_BIG = "ENDIAN_BIG"
-ByteArray.radix = {[10]="%03u",[8]="%03o",[16]="%02X"}
+--====================================================================--
+--== Support Functions
 
-require("pack")
 
---- Return a string to display.
--- If self is ByteArray, read string from self.
--- Else, treat self as byte string.
--- @param __radix radix of display, value is 8, 10 or 16, default is 10.
--- @param __separator default is " ".
--- @return string, number
-function ByteArray.toString(self, __radix, __separator)
-	__radix = __radix or 16
-	__radix = ByteArray.radix[__radix] or "%02X"
-	__separator = __separator or " "
-	local __fmt = __radix..__separator
-	local __format = function(__s)
-		return string.format(__fmt, string.byte(__s))
+-- hexDump()
+-- pretty-print data in hex table
+--
+function Utils.hexDump( buf )
+	for i=1,math.ceil(#buf/16) * 16 do
+		if (i-1) % 16 == 0 then io.write(string.format('%08X  ', i-1)) end
+		io.write( i > #buf and '   ' or string.format('%02X ', buf:byte(i)) )
+		if i %  8 == 0 then io.write(' ') end
+		if i % 16 == 0 then io.write( buf:sub(i-16+1, i):gsub('%c','.'), '\n' ) end
 	end
-	if type(self) == "string" then
-		return string.gsub(self, "(.)", __format)
+end
+
+
+
+--====================================================================--
+--== Byte Array Class
+--====================================================================--
+
+
+local ByteArray = newClass( Parents, { name="Byte Array" } )
+
+
+--======================================================--
+-- Start: Setup Lua Objects
+
+function ByteArray:__new__( params )
+	-- print( "ByteArray:__new__" )
+	params = params or {}
+	self:superCall( '__new__', params )
+	--==--
+
+	self._endian = params.endian
+	self._buf = "" -- buffer is string of bytes
+	self._pos = 1 -- current position for reading
+
+end
+
+-- END: Setup Lua Objects
+--======================================================--
+
+
+--====================================================================--
+--== Static Methods
+
+
+function ByteArray.getBytes( buffer, index, length )
+	-- print( "ByteArray:getBytes", buffer, index, length )
+	assert( type(buffer)=='string', "buffer must be string" )
+	--==--
+	local idx_end
+	index = index or 1
+	assert( index>=1 and index<=#buffer+1, "index out of range" )
+	assert( type(index)=='number', "start index must be a number" )
+
+	if length~=nil then
+		idx_end = index + length - 1
 	end
-	local __bytes = {}
-	for i=1,#self._buf do
-		__bytes[i] = __format(self._buf[i])
+
+	return string.sub( buffer, index, idx_end )
+end
+
+function ByteArray.putBytes( buffer, bytes, index )
+	-- print( "ByteArray:putBytes", buffer, bytes, #bytes, index )
+	assert( type(buffer)=='string', "buffer must be string" )
+	assert( type(bytes)=='string', "bytes must be string" )
+	--==--
+	if not index then
+		return buffer .. bytes
 	end
-	return table.concat(__bytes) ,#__bytes
+
+	assert( type(index)=='number', "index must be a number" )
+	assert( index>=1 and index<=#buffer+1, "index out of range" )
+
+	local buf_len, byte_len = #buffer, #bytes
+	local result, buf_start, buf_end
+
+	if index == 1 and byte_len >= buf_len then
+		result = bytes
+	elseif index == 1 and byte_len < buf_len then
+		buf_end = string.sub( buffer, byte_len+1 )
+		result = bytes .. buf_end
+	elseif index <= buf_len and buf_len < (index + byte_len) then
+		buf_start = string.sub( buffer, 1, index-1 )
+		result = buf_start .. bytes
+	else
+		buf_start = string.sub( buffer, 1, index-1 )
+		buf_end = string.sub( buffer, index+byte_len )
+		result = buf_start .. bytes .. buf_end
+	end
+
+	return result
 end
 
-function ByteArray:ctor(__endian)
-	self._endian = __endian
-	self._buf = ""
-	self._pos = 1
-end
 
-function ByteArray:getLen()
-	return #self._buf
-end
 
-function ByteArray:getAvailable()
-	return #self._buf - self._pos + 1
-end
+--====================================================================--
+--== Public Methods
 
-function ByteArray:getPos()
-	return self._pos
-end
 
-function ByteArray:setPos(__pos)
-	self._pos = __pos
-	return self
-end
-
-function ByteArray:getEndian()
+function ByteArray.__getters:endian()
 	return self._endian
 end
 
-function ByteArray:setEndian(__endian)
-	self._endian = __endian
+function ByteArray.__setters:endian( value )
+	self._endian = value
 end
 
---- Get all byte array as a lua string.
--- Do not update position.
-function ByteArray:getBytes(__idx_start, __idx_end)
-	-- print( "getBytes", __idx_start, __idx_end )
-	__idx_start = __idx_start or 1
-	__idx_end = __idx_end or #self._buf
-	-- local __index = __idx_start + __idx_end
-	-- print("getBytes,offset:%u, length:%u", __idx_start, __idx_end)
-	-- print("getBytes,offset:%u, length:%u", __idx_start, __idx_end)
-	return string.sub( self._buf, __idx_start, __idx_end)
-	-- return table.concat(self._buf, "", __offset, __idx_end)
+
+function ByteArray.__getters:length()
+	return #self._buf
 end
 
---- Get pack style string by lpack.
--- The result use ByteArray.getBytes to get is unavailable for lua socket.
--- E.g. the #self:_buf is 18, but #ByteArray.getBytes is 63.
--- I think the cause is the table.concat treat every item in ByteArray._buf as a general string, not a char.
--- So, I use lpack repackage the ByteArray._buf, theretofore, I must convert them to a byte number.
-function ByteArray:getPack(__offset, __length)
-	__offset = __offset or 1
-	__length = __length or #self._buf
-	local __t = {}
-	for i=__offset,__length do
-		__t[#__t+1] = string.byte(self._buf[i])
-	end
-	local __fmt = self:_getLC("b"..#__t)
-	--print("fmt:", __fmt)
-	local __s = string.pack(__fmt, unpack(__t))
-	return __s
+function ByteArray.__getters:bytesAvailable()
+	return #self._buf - (self._pos-1)
 end
 
---- rawUnPack perform like lpack.pack, but return the ByteArray.
-function ByteArray:rawPack(__fmt, ...)
-	local __s = string.pack(__fmt, ...)
-	self:writeBuf(__s)
+
+
+function ByteArray.__getters:position()
+	return self._pos
+end
+
+function ByteArray.__setters:position( pos )
+	assert( type(pos)=='number', "position value must be integer")
+	assert( pos >= 1 and pos <= self.length + 1 )
+	--==--
+	self._pos = pos
 	return self
 end
 
---- rawUnPack perform like lpack.unpack, but it is only support FORMAT parameter.
--- Because ByteArray include a position itself, so we haven't to save another.
-function ByteArray:rawUnPack(__fmt)
-	-- read all of bytes.
-	local __s = self:getBytes(self._pos)
-	local __next, __val = string.unpack(__s, __fmt)
-	-- update position of the ByteArray
-	self._pos = self._pos + __next
-	-- Alternate value and next
-	return __val, __next
+
+function ByteArray:toHex()
+	Utils.hexDump( self._buf )
 end
 
-function ByteArray:readBool()
-	self:_checkAvailable(1)
-	-- When char > 256, the readByte method will show an error.
-	-- So, we have to use readChar
-	return self:readChar() ~= 0
+
+function ByteArray:toString()
+	return self._buf
 end
 
-function ByteArray:writeBool(__bool)
-	if __bool then
+
+function ByteArray:search( str )
+	assert( type(str)=='string', "search value must be string")
+	--==--
+	return string.find( self._buf, str )
+end
+
+
+function ByteArray:readBoolean()
+	return (self:readByte() ~= 0)
+end
+
+function ByteArray:writeBoolean( boolean )
+	assert( type(boolean)=='boolean', "expected boolean type" )
+	--==--
+	if boolean then
 		self:writeByte(1)
 	else
 		self:writeByte(0)
 	end
-	return self
-end
-
-function ByteArray:readDouble()
-	self:_checkAvailable(8)
-	local __, __v = string.unpack(self:readBuf(8), self:_getLC("d"))
-	return __v
-end
-
-function ByteArray:writeDouble(__double)
-	local __s = string.pack( self:_getLC("d"), __double)
-	self:writeBuf(__s)
-	return self
-end
-
-function ByteArray:readFloat()
-	self:_checkAvailable(4)
-	local __, __v = string.unpack(self:readBuf(4), self:_getLC("f"))
-	return __v
-end
-
-function ByteArray:writeFloat(__float)
-	local __s = string.pack( self:_getLC("f"),  __float)
-	self:writeBuf(__s)
-	return self
-end
-
-function ByteArray:readInt()
-	self:_checkAvailable(4)
-	local __, __v = string.unpack(self:readBuf(4), self:_getLC("i"))
-	return __v
-end
-
-function ByteArray:writeInt(__int)
-	local __s = string.pack( self:_getLC("i"),  __int)
-	self:writeBuf(__s)
-	return self
-end
-
-function ByteArray:readUInt()
-	self:_checkAvailable(4)
-	local __, __v = string.unpack(self:readBuf(4), self:_getLC("I"))
-	return __v
-end
-
-function ByteArray:writeUInt(__uint)
-	local __s = string.pack(self:_getLC("I"), __uint)
-	self:writeBuf(__s)
-	return self
-end
-
-function ByteArray:readShort()
-	self:_checkAvailable(2)
-	local __, __v = string.unpack(self:readBuf(2), self:_getLC("h"))
-	return __v
-end
-
-function ByteArray:writeShort(__short)
-	local __s = string.pack( self:_getLC("h"),  __short)
-	self:writeBuf(__s)
-	return self
-end
-
-function ByteArray:readUShort()
-	self:_checkAvailable(2)
-	local __, __v = string.unpack(self:readBuf(2), self:_getLC("H"))
-	return __v
-end
-
-function ByteArray:writeUShort(__ushort)
-	local __s = string.pack(self:_getLC("H"),  __ushort)
-	self:writeBuf(__s)
-	return self
-end
-
-function ByteArray:readLong()
-	self:_checkAvailable(8)
-	local __, __v = string.unpack(self:readBuf(8), self:_getLC("l"))
-	return __v
-end
-
-function ByteArray:writeLong(__long)
-	local __s = string.pack( self:_getLC("l"),  __long)
-	self:writeBuf(__s)
-	return self
-end
-
-function ByteArray:readULong()
-	self:_checkAvailable(4)
-	local __, __v = string.unpack(self:readBuf(4), self:_getLC("L"))
-	return __v
+	return self -- chaining
 end
 
 
-function ByteArray:writeULong(__ulong)
-	local __s = string.pack( self:_getLC("L"), __ulong)
-	self:writeBuf(__s)
-	return self
-end
-
-function ByteArray:readUByte()
-	self:_checkAvailable(1)
-	local __, __val = string.unpack(self:readRawByte(), "b")
-	return __val
-end
-
-function ByteArray:writeUByte(__ubyte)
-	local __s = string.pack("b", __ubyte)
-	self:writeBuf(__s)
-	return self
-end
-
-function ByteArray:readLuaNumber(__number)
-	self:_checkAvailable(8)
-	local __, __v = string.unpack(self:readBuf(8), self:_getLC("n"))
-	return __v
-end
-
-function ByteArray:writeLuaNumber(__number)
-	local __s = string.pack(self:_getLC("n"), __number)
-	self:writeBuf(__s)
-	return self
-end
-
-function ByteArray:readStringBytes(__len)
-	assert(__len, "Need a length of the string!")
-	if __len == 0 then return "" end
-	self:_checkAvailable(__len)
-	local __, __v = string.unpack(self:readBuf(__len), self:_getLC("A"..__len))
-	return __v
-end
-
-function ByteArray:writeStringBytes(__string)
-	local __s = string.pack(self:_getLC("A"), __string)
-	self:writeBuf(__s)
-	return self
-end
-
---- DO NOT use this method, it's inefficient.
--- Alternatively use readStringBytes.
-function ByteArray:readString(__len)
-	assert(__len, "Need a length of the string!")
-	if __len == 0 then return "" end
-	self:_checkAvailable(__len)
-	local __bytes = ""
-	for i=self._pos, #self._buf do
-		local __byte = string.byte(self._buf[i])
-		__bytes = __bytes .. string.char(__byte)
-	end
-	return __bytes
-end
-
-function ByteArray:writeString(__string)
-	self:writeBuf(__string)
-	return self
-end
-
-function ByteArray:readStringUInt()
-	local __len = self:readUInt()
-	return self:readStringBytes(__len)
-end
-
-function ByteArray:writeStringUInt(__string)
-	self:writeUInt(#__string)
-	self:writeStringBytes(__string)
-	return self
-end
-
---- The length of size_t in C/C++ is mutable.
--- In 64bit os, it is 8 bytes.
--- In 32bit os, it is 4 bytes.
-function ByteArray:readStringSizeT()
-	self:_checkAvailable(8) -- TODO
-	local __s = self:rawUnPack(self:_getLC("a"))
-	return __s
-end
-
---- Perform rawPack() simply.
-function ByteArray:writeStringSizeT(__string)
-	self:rawPack(self:_getLC("a"), __string)
-	return self
-end
-
-function ByteArray:readStringUShort()
-	local __len = self:readUShort()
-	return self:readStringBytes(__len)
-end
-
-function ByteArray:writeStringUShort(__string)
-	local __s = string.pack(self:_getLC("P"), __string)
-	self:writeBuf(__s)
-	return self
-end
-
---- Read some bytes from buf
--- @return a bit string
-function ByteArray:readBytes(__bytes, __offset, __length)
-	assert(iskindof(__bytes, "ByteArray"), "Need a ByteArray instance!")
-	local __selfLen = #self._buf
-	local __availableLen = __selfLen - self._pos + 1
-	__offset = __offset or 1
-	if __offset > __selfLen then __offset = 1 end
-	__length = __length or 0
-	if __length == 0 or __length > __availableLen then __length = __availableLen end
-	self:_checkAvailable(__length)
-	__bytes:setPos(__offset)
-	for i=__offset,__offset+__length-1 do
-		__bytes:writeRawByte(self:readRawByte())
-	end
-end
-
---- Write some bytes into buf
-function ByteArray:writeBytes(__bytes, __offset, __length)
-	assert(iskindof(__bytes, "ByteArray"), "Need a ByteArray instance!")
-	local __bytesLen = __bytes:getLen()
-	if __bytesLen == 0 then return end
-	__offset = __offset or 1
-	if __offset > __bytesLen then __offset = 1 end
-	local __availableLen = __bytesLen - __offset
-	__length = __length or __availableLen
-	if __length == 0 or __length > __availableLen then __length = __availableLen end
-	local __oldPos = __bytes:getPos()
-	__bytes:setPos(__offset)
-	for i=__offset,__offset+__length do
-		self:writeRawByte(__bytes:readRawByte())
-	end
-	__bytes:setPos(__oldPos)
-	return self
-end
-
---- Actionscript3 readByte == lpack readChar
--- A signed char
-function ByteArray:readChar()
-	local __, __val = string.unpack( self:readRawByte(), "c")
-	return __val
-end
-
-function ByteArray:writeChar(__char)
-	self:writeRawByte(string.pack("c", __char))
-	return self
-end
-
---- Use the lua string library to get a byte
--- A unsigned char ]
+-- byte is number from 0<>255
 function ByteArray:readByte()
-	return string.byte(self:readRawByte())
+	return string.byte( self:readChar() )
 end
 
---- Use the lua string library to write a byte.
--- The byte is a number between 0 and 255, otherwise, the lua will get an error.
-function ByteArray:writeByte(__byte)
-	assert( __byte>=0 and __byte<=255 )
-	self:writeRawByte(string.char(__byte))
-	return self
+function ByteArray:writeByte( byte )
+	assert( type(byte)=='number', "not valid byte" )
+	assert( byte>=0 and byte<=255, "not valid byte" )
+	--==--
+	self:writeChar( string.char(byte) )
 end
 
-function ByteArray:readRawByte()
+
+function ByteArray:readChar()
 	self:_checkAvailable(1)
-	-- local __byte = self._buf[self._pos]
-	local __byte = string.sub( self._buf, self._pos, self._pos )
+	local char = self.getBytes( self._buf, self._pos, 1 )
 	self._pos = self._pos + 1
-	return __byte
+	return char
 end
 
-function ByteArray:writeRawByte(__rawByte)
-	assert( __rawByte ~= nil )
-	local t = {}
-	table.insert( t, self._buf )
-
-	if self._pos > #self._buf+1 then
-		for i=#self._buf+1,self._pos-1 do
-			-- self._buf[i] = string.char(0)
-			table.insert( t, string.char(0) )
-		end
-	end
-	-- self._buf[self._pos] = __rawByte
-	table.insert( t, __rawByte )
-	self._buf = table.concat(t, '')
-	self._pos = self._pos + 1
+-- should be single character
+function ByteArray:writeChar( char )
+	self._buf = self.putBytes( self._buf, char )
 	return self
 end
 
---- Read a byte array as string from current position, then update the position.
-function ByteArray:readBuf(__len)
-	-- print("readBuf,len:%u, pos:%u", __len, self._pos)
-	self:_checkAvailable(__len)
-	local __ba = self:getBytes(self._pos, (self._pos-1) + __len)
-	self._pos = self._pos + __len
-	return __ba
+
+
+-- Read byte string from ByteArray starting from current position,
+-- then update the position
+function ByteArray:readUTFBytes( len )
+	-- print( "ByteArray:readUTFBytes", len, self._pos )
+	assert( type(len)=='number', "need integer length" )
+	--==--
+	if len == 0 then return "" end
+	self:_checkAvailable( len )
+	local bytes = self.getBytes( self._buf, self._pos, len )
+	self._pos = self._pos + len
+	return bytes
 end
+
+ByteArray.readBuf = ByteArray.readUTFBytes
 
 --- Write a encoded char array into buf
-function ByteArray:writeBuf(__s)
-	assert( type(__s) == 'string', "must be string" )
-	for i=1,#__s do
-		self:writeRawByte(__s:sub(i,i))
-	end
-	return self
+function ByteArray:writeUTFBytes( bytes, index )
+	assert( type(bytes)=='string', "must be string" )
+	--==--
+	self._buf = ByteArray.putBytes( self._buf, bytes, index )
+	return self -- chaining
 end
 
-----------------------------------------
--- private
-----------------------------------------
-function ByteArray:_checkAvailable(__len)
-	local avail = #self._buf - (self._pos-1)
-	if avail < __len then
+ByteArray.writeBuf = ByteArray.writeUTFBytes
+
+
+
+-- reads bytes FROM us TO array
+-- ba array to read TO
+-- length for ba being read from
+-- offset for ba being written to
+--
+function ByteArray:readBytes( ba, offset, length )
+	assert( ba and ba:isa(ByteArray), "Need a ByteArray instance" )
+	--==--
+	offset = offset ~= nil and offset or 1
+	length = length ~= nil and length or ba.bytesAvailable
+	if length == 0 then return end
+
+	assert( type(offset)=='number', "offset must be a number" )
+	assert( type(length)=='number', "offset must be a number" )
+
+	local bytes = self:readUTFBytes( length )
+	ba._buf = ByteArray.putBytes( ba._buf, bytes, offset )
+
+	return self -- chaining
+end
+
+
+-- write bytes TO us FROM array
+-- ba array to write FROM
+-- length for ba being read from
+-- offset for ba being written to
+--
+function ByteArray:writeBytes( ba, offset, length )
+	assert( ba and ba:isa(ByteArray), "Need a ByteArray instance" )
+	--==--
+	offset = offset ~= nil and offset or 1
+	length = length ~= nil and length or ba.bytesAvailable
+	if length == 0 then return end
+
+	assert( type(offset)=='number', "offset must be a number" )
+	assert( type(length)=='number', "offset must be a number" )
+
+	local bytes = ba:readUTFBytes( length )
+	self._buf = ByteArray.putBytes( self._buf, bytes, offset )
+
+	return self -- chaining
+end
+
+
+
+--====================================================================--
+--== Private Methods
+
+
+function ByteArray:_checkAvailable( len )
+	-- print( "ByteArray:_checkAvailable", len )
+	if len > self.bytesAvailable then
 		error( Error.BufferError("Read surpasses buffer size") )
 	end
 end
 
---- Get Letter Code
-function ByteArray:_getLC(__fmt)
-	__fmt = __fmt or ""
-	if self._endian == ByteArray.ENDIAN_LITTLE then
-		return "<"..__fmt
-	elseif self._endian == ByteArray.ENDIAN_BIG then
-		return ">"..__fmt
-	end
-	return "="..__fmt
-end
+
 
 return ByteArray
