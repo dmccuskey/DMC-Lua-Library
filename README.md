@@ -1,8 +1,14 @@
 # DMC Lua Library #
 
-A collection of Lua modules.
+This library repo is just the collection of Lua modules from my other repos, so it is just a convenient spot to get and update all of them.
 
-These are pure Lua modules extracted from my [DMC Corona Library](https://github.com/dmccuskey/DMC-Corona-Library). I did this because I wanted to start using them in a server environment. They have been re-integrated back into the Corona Library, using subclassing, etc.
+All of the modules are actively used by me in building apps both on the server (using [Lua-Corovel](https://github.com/dmccuskey/lua-corovel)) and on mobile devices (using the Corona SDK).
+
+
+*Documentation*
+
+Limited documentation can be found in each of the corresponding repos and generally serves well for getting an overview of the module features. The majority of the documentation is found online at http://docs.davidmccuskey.com/
+
 
 *Tests*
 
@@ -33,9 +39,17 @@ Run at the command line:
 
   Better error handling for Lua. [Read more...](#lua_error)
 
+* [lua_events_mix](#lua_events_mix)
+
+  Mixin or monkey-patch event functionality to your objects. [Read more...](#lua_events_mix)
+
 * [lua_files](#lua_files)
 
   File tasks, handling json, config files. [Read more...](#lua_files)
+
+* [lua_megaphone](#lua_megaphone)
+
+  In-app, global communication object. [Read more...](#lua_megaphone)
 
 * [lua_objects](#lua_objects)
 
@@ -49,9 +63,9 @@ Run at the command line:
 
   Deferreds and Promises for Lua. [Read more...](#lua_promise)
 
-* [lua_states](#lua_states)
+* [lua_states_mix](#lua_states_mix)
 
-  A mixin module which adds State Machine functionality to your objects. [Read more...](#lua_states)
+  Mixin or monkey-patch State Machine functionality to your objects. [Read more...](#lua_states_mix)
 
 * [lua_utils](#lua_utils)
 
