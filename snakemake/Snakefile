@@ -1,0 +1,102 @@
+# global flag, if we've started
+gSTARTED = True
+DEBUG = False
+
+configfile: "../DMC-Lua-Library/snakemake/snakeconfig.json"
+
+# vars
+#
+MODFILE_DIR = config['module']['files_dir']
+CONFIG = {}
+FILEMAP = {}
+
+assert MODFILE_DIR, "module file directory not specified"
+
+# register a module config
+#
+def register( name, config ):
+	if DEBUG: print( "Registering: ", name )
+
+	# save config in our structure
+	CONFIG[name]=config
+
+	if DEBUG: print( 'Checking requires for: ', name )
+	for module in CONFIG[name]['module']['requires']:
+		if module in CONFIG.keys():
+			if DEBUG: print( "already imported: ", module )
+			pass
+		else:
+			if DEBUG: print( "importing ../%s/Snakefile" % module )
+			include: "../%s/Snakefile" % module
+
+
+# either 'core' or 'test'
+#
+def getModuleFiles( target, section='module' ):
+	if DEBUG: print( "getModuleFiles", target, section )
+	list = []
+
+	for fname in CONFIG[target][section]['files']:
+		file = "./{0}/{1}".format( MODFILE_DIR, fname )
+		if DEBUG: print( "adding file: ", file )
+		FILEMAP[ file ] = target
+		list.append( file )
+
+	return list
+
+
+# collects all required modules, recursively
+# either 'core' or 'test'
+#
+def getModuleModules( target, dict={}, section='module', type='requires' ):
+	if DEBUG: print( "getModuleModules", target, section, type )
+
+	requires = CONFIG[target][section][type]
+	for module in requires:
+		if DEBUG: print( "checking", module )
+		dict[ module ] = True
+		getModuleModules( module, dict=dict, section=section, type=type )
+
+	if DEBUG: print( "Got module list: ", dict.keys() )
+	return dict
+
+
+
+########
+########
+
+# loops through all required modules, gets their 'core' files
+#
+def getRequiredFiles( target ):
+	if DEBUG: print( "getRequiredFiles", target )
+	list = []
+
+	assert CONFIG[target], "config data missing for target"
+
+	requires = getModuleModules( target, section='module', type='requires' )
+	for module in requires:
+		if DEBUG: print( "loading files for module: ", module )
+		list += getModuleFiles( module )
+
+	if DEBUG: print( "Got file list: ", list )
+	return list
+
+
+
+
+rule all:
+	input: lambda MODULE: getFiles( MODULE )
+
+
+
+REQUIRE_FROM="../{repo}/{libdir}/{name}.lua"
+REQUIRE_TO="./{libdir}/{name}.lua"
+
+rule get_requires:
+	input: lambda x: getRequiredFiles( MODULE )
+
+rule copy_requires:
+	output: REQUIRE_TO
+	input: lambda wildcards: REQUIRE_FROM.format(repo=FILEMAP[ REQUIRE_TO.format(libdir= wildcards.libdir, name=wildcards.name)], libdir=wildcards.libdir, name=wildcards.name )
+	shell: "cp {input} {output}"
+
