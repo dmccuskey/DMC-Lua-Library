@@ -1,5 +1,7 @@
 {
 	"module": {
-		"files_dir": "dmc_lua"
+		"base_dir": "dmc_lua",
+		"libs": {
+		}
 	}
 }

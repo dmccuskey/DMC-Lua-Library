@@ -43,10 +43,8 @@ module_config = {
 	},
 	"tests": {
 		"dir": "spec",
-		"files": [
-		],
-		"requires": [
-		]
+		"files": [],
+		"requires": []
 	}
 }
 
