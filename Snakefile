@@ -9,7 +9,22 @@ except:
 module_config = {
 	"name": "DMC-Lua-Library",
 	"module": {
+		"dir": "dmc_lua",
 		"files": [
+			"json.lua",
+			"lua_bytearray.lua",
+			"lua_bytearray/exceptions.lua",
+			"lua_bytearray/pack_bytearray.lua",
+			"lua_e4x.lua",
+			"lua_error.lua",
+			"lua_events_mix.lua",
+			"lua_files.lua",
+			"lua_megaphone.lua",
+			"lua_objects.lua",
+			"lua_patch.lua",
+			"lua_promise.lua",
+			"lua_states_mix.lua",
+			"lua_utils.lua"
 		],
 		"requires": [
 			"lua-bytearray",
@@ -27,6 +42,7 @@ module_config = {
 		]
 	},
 	"tests": {
+		"dir": "spec",
 		"files": [
 		],
 		"requires": [

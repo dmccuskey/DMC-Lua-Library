@@ -97,6 +97,6 @@ rule get_requires:
 
 rule copy_requires:
 	output: REQUIRE_TO
-	input: lambda wildcards: REQUIRE_FROM.format(repo=FILEMAP[ REQUIRE_TO.format(libdir= wildcards.libdir, name=wildcards.name)], libdir=wildcards.libdir, name=wildcards.name )
+	input: lambda wildcards: REQUIRE_FROM.format(repo=FILEMAP[ REQUIRE_TO.format(libdir=wildcards.libdir, name=wildcards.name) ], libdir=wildcards.libdir, name=wildcards.name )
 	shell: "cp {input} {output}"
 
