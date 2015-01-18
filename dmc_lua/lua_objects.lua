@@ -39,7 +39,7 @@ SOFTWARE.
 
 -- Semantic Versioning Specification: http://semver.org/
 
-local VERSION = "1.1.4"
+local VERSION = "1.5.0"
 
 
 
@@ -508,6 +508,10 @@ end
 
 function ClassBase.__getters:is_instance()
 	return not self.__is_class
+end
+
+function ClassBase.__getters:version()
+	return self.__version
 end
 
 
