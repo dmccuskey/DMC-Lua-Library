@@ -27,6 +27,7 @@ module_config = {
 			"lua_utils.lua"
 		],
 		"requires": [
+			"lua-bit-shim",
 			"lua-bytearray",
 			"lua-e4x",
 			"lua-error",
