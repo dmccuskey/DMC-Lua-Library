@@ -11,6 +11,8 @@ module_config = {
 	"module": {
 		"dir": "dmc_lua",
 		"files": [
+			"bit.lua",
+			"lib/bit/numberlua.lua",
 			"json.lua",
 			"lua_bytearray.lua",
 			"lua_bytearray/exceptions.lua",
