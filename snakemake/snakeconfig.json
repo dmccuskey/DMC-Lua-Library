@@ -1,6 +1,6 @@
 {
 	"module": {
-		"base_dir": "dmc_lua",
+		"default_dir": "dmc_lua",
 		"libs": {
 		}
 	}
