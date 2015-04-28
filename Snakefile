@@ -17,6 +17,7 @@ module_config = {
 			"lua_bytearray.lua",
 			"lua_bytearray/exceptions.lua",
 			"lua_bytearray/pack_bytearray.lua",
+			"lua_class",
 			"lua_e4x.lua",
 			"lua_error.lua",
 			"lua_events_mix.lua",
@@ -24,6 +25,7 @@ module_config = {
 			"lua_megaphone.lua",
 			"lua_objects.lua",
 			"lua_patch.lua",
+			#"lua_path.lua",
 			"lua_promise.lua",
 			"lua_states_mix.lua",
 			"lua_utils.lua"
@@ -31,6 +33,7 @@ module_config = {
 		"requires": [
 			"lua-bit-shim",
 			"lua-bytearray",
+			"lua-class",
 			"lua-e4x",
 			"lua-error",
 			"lua-events-mixin",
@@ -39,6 +42,7 @@ module_config = {
 			"lua-megaphone",
 			"lua-objects",
 			"lua-patch",
+			#"lua-path",
 			"lua-promise",
 			"lua-states-mixin",
 			"lua-utils"
