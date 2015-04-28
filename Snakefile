@@ -17,7 +17,7 @@ module_config = {
 			"lua_bytearray.lua",
 			"lua_bytearray/exceptions.lua",
 			"lua_bytearray/pack_bytearray.lua",
-			"lua_class",
+			"lua_class.lua",
 			"lua_e4x.lua",
 			"lua_error.lua",
 			"lua_events_mix.lua",
