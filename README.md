@@ -1,293 +1,131 @@
-# DMC Lua Library #
+# DMC-Lua-Library
 
-This library repo is just the collection of Lua modules from my other repos, so it is just a convenient spot to get and update all of them.
+The DMC Lua modules in one folder: classes and objects, events, errors, promises, state machines, files, XML and more, for Lua 5.1.
 
-All of the modules are actively used by me in building apps both on the server (using [Lua-Corovel](https://github.com/dmccuskey/lua-corovel)) and on mobile devices (using the Corona SDK).
+Each module is written and documented in its own repository; this one only collects copies of them, so a project can take all of them in one clone, at versions that work together. They were written for the DMC Solar2D (formerly Corona SDK) libraries, which all ship this folder, but they are plain Lua 5.1 and also run on a server.
 
+## Modules
 
-*Documentation*
+Everything is in `dmc_lua/`. Each module's repository has its Quick Start, reference and known issues.
 
-Limited documentation can be found in each of the corresponding repos and generally serves well for getting an overview of the module features. The majority of the documentation is found online at http://docs.davidmccuskey.com/
+| module | repository | what it is |
+|---|---|---|
+| `lua_class` | [lua-class](https://github.com/dmccuskey/lua-class) | Classes: inheritance from one or several classes, getters and setters, calls to a parent's method |
+| `lua_objects` | [lua-objects](https://github.com/dmccuskey/lua-objects) | A base class for objects: events, and a set order for setting an object up and tearing it down |
+| `lua_events_mix` | [lua-events-mixin](https://github.com/dmccuskey/lua-events-mixin) | `addEventListener()`, `removeEventListener()` and `dispatchEvent()` for any object |
+| `lua_states_mix` | [lua-states-mixin](https://github.com/dmccuskey/lua-states-mixin) | Turns any object into a state machine |
+| `lua_error` | [lua-error](https://github.com/dmccuskey/lua-error) | `try`, `catch` and `finally`, and error classes you can raise and recognize |
+| `lua_promise` | [lua-promise](https://github.com/dmccuskey/lua-promise) | Deferreds and promises, for results that arrive later |
+| `lua_megaphone` | [lua-megaphone](https://github.com/dmccuskey/lua-megaphone) | One shared object that any part of an app can send messages to and listen on |
+| `lua_bytearray` | [lua-bytearray](https://github.com/dmccuskey/lua-bytearray) | A byte buffer for binary data; reading and writing numbers needs the `pack` C module (lpack) |
+| `lua_e4x` | [lua-e4x](https://github.com/dmccuskey/lua-e4x) | Read XML with dot syntax: `xml.book.title` |
+| `lua_files` | [lua-files](https://github.com/dmccuskey/lua-files) | Read and write text, lines, JSON and config files in one call each; uses `lfs` and a JSON module when they are installed |
+| `lua_patch` | [lua-patch](https://github.com/dmccuskey/lua-patch) | Python-style additions: `%` string formatting, `table.pop()`, `pnotice()`/`pwarn()` |
+| `lua_utils` | [lua-utils](https://github.com/dmccuskey/lua-utils) | Small helpers for tables, strings, URLs, callbacks, time and image scaling |
+| `json` | [lua-json-shim](https://github.com/dmccuskey/lua-json-shim) | Loads whichever JSON module is installed (`dkjson`, `cjson` or `json`) as `json` |
+| `bit` | [lua-bit-shim](https://github.com/dmccuskey/lua-bit-shim) | Loads Solar2D's `plugin.bit`, or else the pure-Lua copy in `lib/bit/numberlua.lua`, as `bit` |
 
+The modules require each other by their plain names (`require 'lua_class'`), so `dmc_lua/` has to be on the Lua search path, as in the Quick Start. Each module's version is in its header.
 
-*Tests*
+## Quick Start
 
-The available unit tests are written using [Busted](https://github.com/Olivine-Labs/busted). Install using luarocks:
+The following steps will get you up and running in about 5 minutes with Lua 5.1 on macOS or Linux. You will use three of the modules together: a promise delivers a result, a caught error is reported, and both go out on the megaphone.
 
-`> luarocks install busted`
+Prerequisites: Lua 5.1 (`lua -v` shows `Lua 5.1.x`) and git.
 
-Run at the command line:
+### 1. Get the Code
 
-`> busted`
+In an empty folder:
 
-
-## Current Modules ##
-
-* [json](#json)
-
-  A shim to load Lua `json` modules. [Read more...](#json)
-
-* [lua_bytearray](#lua_bytearray)
-
-  A Lua byte array module. [Read more...](#lua_bytearray)
-
-* [lua_e4x](#lua_e4x)
-
-  Pure Lua E4X XML parser. [Read more...](#lua_e4x)
-
-* [lua_error](#lua_error)
-
-  Better error handling for Lua. [Read more...](#lua_error)
-
-* [lua_events_mix](#lua_events_mix)
-
-  Mixin or monkey-patch event functionality to your objects. [Read more...](#lua_events_mix)
-
-* [lua_files](#lua_files)
-
-  File tasks, handling json, config files. [Read more...](#lua_files)
-
-* [lua_megaphone](#lua_megaphone)
-
-  In-app, global communication object. [Read more...](#lua_megaphone)
-
-* [lua_objects](#lua_objects)
-
-  Advanced OOP for Lua. [Read more...](#lua_objects)
-
-* [lua_patch](#lua_patch)
-
-  Patch Lua with Python-cool. [Read more...](#lua_patch)
-
-* [lua_promise](#lua_promise)
-
-  Deferreds and Promises for Lua. [Read more...](#lua_promise)
-
-* [lua_states_mix](#lua_states_mix)
-
-  Mixin or monkey-patch State Machine functionality to your objects. [Read more...](#lua_states_mix)
-
-* [lua_utils](#lua_utils)
-
-  Miscellaneous utility functions. [Read more...](#lua_utils)
-
-
-
-<a name="json"></a>
-### Module: json ###
-
-This file is used to load any of the various Lua `json` modules, but standardize the name to `json`. Currently it searches for one of `dkjson`, `cjson` or `json`.
-
-Of course you will need to install one of the above for it to work. You can also edit the file to add your favorite json module.
-
-```
-> luarocks install dkjson
-> luarocks install lua-cjson
+```sh
+git clone https://github.com/dmccuskey/DMC-Lua-Library.git
 ```
 
+### 2. Use Some Modules
 
-
-<a name="lua_bytearray"></a>
-### Module: lua_bytearray ###
-
-Currently this library contains two byte array modules – `lua_bytearray` and `bytearray`. The former is from another dev and contains methods for un/packing bytes into shorts, longs, etc. The latter currently only supports string-base read/writes. I currently use both in my projects, though I plan on joining the two.
-
-If you want to use `lua_bytearray` then you need to install `lpack`:
-
-`> luarocks install lpack`
-
-
-**Documentation**
-
-http://docs.davidmccuskey.com/display/docs/lua_bytearray.lua
-
-
-**Examples**
-
-There are a lot of examples in the unit test file, `spec/lua_bytearray_spec.lua`.
-
-
-
-<a name="lua_e4x"></a>
-### Module: lua_e4x ###
-
-`lua_e4x` is an implementation of E4X for sane XML navigation in Lua.
-
-
-**Documentation**
-
-http://docs.davidmccuskey.com/display/docs/lua_e4x.lua
-
-
-**Examples**
-
-There are a lot of examples in the unit test file, `spec/lua_e4x_spec.lua`.
-
-There is also a micro example on the documentation website.
-
-
-
-<a name="lua_error"></a>
-### Module: lua_error ###
-
-`lua_error` contains an Error base class and several *global* methods (`try()`, `catch()` and `finally()`) used to create a decent error-handling framework similar to that of Python.
-
-As seen in the example below, you can check for regular string-based errors or a custom error class.
+Create `main.lua` in the same folder:
 
 ```lua
+package.path = './DMC-Lua-Library/dmc_lua/?.lua;' .. package.path
+local Megaphone = require 'lua_megaphone'
+local Promise = require 'lua_promise'
+require 'lua_error'  -- adds the globals try, catch and finally
+
+-- a download that answers later, as a promise
+local function fetchScore( player )
+	local d = Promise.Deferred:new()
+	if player == 'ada' then
+		d:callback( 42 )
+	else
+		d:errback( "unknown player " .. player )
+	end
+	return d
+end
+
+-- any module can listen on the one megaphone
+Megaphone:listen( function( event )
+	print( event.type, event.data )
+end )
+
+local function onScore( score ) Megaphone:say( 'score', score ) end
+local function onError( reason ) Megaphone:say( 'failed', reason ) end
+
+fetchScore( 'ada' ):addCallbacks( onScore, onError )
+fetchScore( 'bob' ):addCallbacks( onScore, onError )
+
 try{
 	function()
-		self:unregister( handler, params )
+		error( "out of lives" )
 	end,
-
 	catch{
-		function(e)
-			if type(e)=='string' then
-				error( e )
-			elseif e:isa( Error.ProtocolError ) then
-				self:_bailout(){
-					code=WebSocket.CLOSE_STATUS_CODE_PROTOCOL_ERROR,
-					reason="WAMP Protocol Error"
-				}
-			else
-				self:_bailout{
-					code=WebSocket.CLOSE_STATUS_CODE_INTERNAL_ERROR,
-					reason="WAMP Internal Error"
-				}
-			end
-		end
-	},
-
-	finally{
-		self:close()
+		function( e ) Megaphone:say( 'caught', e ) end
 	}
 }
 ```
 
+Run it:
 
-**Documentation**
+```sh
+lua main.lua
+```
 
-http://docs.davidmccuskey.com/display/docs/lua_error.lua
+```text
+score	42
+failed	unknown player bob
+caught	main.lua:30: out of lives
+```
 
+If it shows `module 'lua_megaphone' not found`, run it from the folder that holds `DMC-Lua-Library/`.
 
-**Examples**
+**Going further:** each module's own Quick Start, in its repository ([Modules](#modules)).
 
-None yet
+To update, pull the repository again (`git -C DMC-Lua-Library pull`).
 
+## In Solar2D
 
+Every DMC Solar2D library (`dmc-*`) ships this folder as `dmc_corona/lib/dmc_lua/`; [dmc-corona-boot](https://github.com/dmccuskey/dmc-corona-boot) adds it to the search path, and the libraries require the modules as `lib.dmc_lua.<module>`.
 
-<a name="lua_files"></a>
-### Module: lua_files ###
+Most modules also have a Solar2D package, which loads the module and documents its use in Solar2D: [dmc-objects](https://github.com/dmccuskey/dmc-objects) (which adds classes for display objects), [dmc-events-mixin](https://github.com/dmccuskey/dmc-events-mixin), [dmc-states-mixin](https://github.com/dmccuskey/dmc-states-mixin), [dmc-error](https://github.com/dmccuskey/dmc-error), [dmc-promise](https://github.com/dmccuskey/dmc-promise), [dmc-megaphone](https://github.com/dmccuskey/dmc-megaphone), [dmc-bytearray](https://github.com/dmccuskey/dmc-bytearray), [dmc-e4x](https://github.com/dmccuskey/dmc-e4x), [dmc-files](https://github.com/dmccuskey/dmc-files), [dmc-patch](https://github.com/dmccuskey/dmc-patch) and [dmc-utils](https://github.com/dmccuskey/dmc-utils) (which adds Solar2D helpers).
 
-`lua_files` contains methods for reading and writing raw data, json, and configuration files.
+Load each module under one name only. Loaded as both `lib.dmc_lua.lua_class` and `lua_class`, a module exists twice: there are two megaphones, and objects made from one copy of a class fail `isa()` checks against the other.
 
+## Known Issues
 
-**Documentation**
+- **The tests in `spec/` are left over from 2015**: `lua_e4x_spec.lua` and `lua_files_spec.lua` pass, but `bytearray_spec.lua` and `lua_states_spec.lua` load modules that no longer exist, and `lua_bytearray_spec.lua` tests an older API. The current tests are in each module's repository.
+- The `Snakefile` names a `lua_path` module, commented out: there is no lua-path repository. Path handling for Solar2D is in [dmc-path](https://github.com/dmccuskey/dmc-path).
 
-http://docs.davidmccuskey.com/display/docs/lua_files.lua
+## Development
 
+Nothing in `dmc_lua/` is edited here: fix a module in its own repository, then rebuild. The build uses [Snakemake](https://snakemake.readthedocs.io/) (last run with 7.32). The `Snakefile` lists the files and the repositories they come from, `snakemake/Snakefile` holds the rules, and each module repository registers its files in its own `Snakefile`.
 
-**Examples**
+A build copies from checkouts of the module repositories next to this one (`../lua-class/` and so on), on whatever branch each one has checked out. From this repository's root folder:
 
-There are a lot of examples in the unit test file, `spec/lua_files_spec.lua`.
+```sh
+snakemake --cores 1 --forceall build_module
+```
 
+Snakemake decides what to copy by file times; `--forceall` copies every file. Until the next build, a copy here can be older than its repository.
 
+## License
 
-<a name="lua_objects"></a>
-### Module: lua_objects ###
-
-`lua_objects` contains several methods and object classes which together form an object-oriented framework to use when programming in Lua.
-
-Some advanced features:
-* getters/setters
-* event dispatch/listeners
-* structured object setup/teardown
-
-
-**Documentation**
-
-http://docs.davidmccuskey.com/display/docs/lua_objects.lua
-
-
-**Examples**
-
-There are a lot of examples in this library's modules and the `dmc-corona-library`.
-
-
-
-<a name="lua_patch"></a>
-### Module: lua_patch ###
-
-`lua_patch` patches Lua with extra functionality, currently this is:
-
-* Python-style string formatting
-* Python-style table pop function
-
-
-**Documentation**
-
-http://docs.davidmccuskey.com/display/docs/lua_patch.lua
-
-
-**Examples**
-
-None yet
-
-
-
-<a name="lua_promise"></a>
-### Module: lua_promise ###
-
-`lua_promise` contains classes and methods to create and use Promises and Deferreds. This is somewhat of a port from Python Twisted.
-
-
-**Documentation**
-
-http://docs.davidmccuskey.com/display/docs/lua_promise.lua
-
-
-**Examples**
-
-None yet
-
-
-
-<a name="lua_states"></a>
-### Module: lua_states ###
-
-`lua_states` mixin adds functionality to Lua objects so they can implement the State Machine design pattern.
-
-
-**Documentation**
-
-http://docs.davidmccuskey.com/display/docs/lua_states.lua
-
-
-**Examples**
-
-There are a lot of examples in the unit test file, `spec/lua_states_spec.lua`.
-
-
-
-<a name="lua_utils"></a>
-### Module: lua_utils ###
-
-This module is an ever-changing list of helpful utility functions. Ever-changing because, over time, some functions have been removed and put into their own modules, eg `lua_performance`. Here are some of the groupings at the moment:
-
-* Callback Functions - createObjectCallback(), getTransitionCompleteFunc()
-* Date Functions - calcTimeBreakdown()
-* Image Functions - imageScale()
-* String Functions - split(), stringFormatting()
-* Table Functions - destroy(), extend(), hasOwnProperty(), print(), propertyIn(), removeFromTable(), shuffle(), tableSize(), tableSlice(), tableLength()
-* Web Functions - urlDecode(), urlEncode(), parseQuery(), createQuery()
-
-
-**Documentation**
-
-http://docs.davidmccuskey.com/display/docs/lua_utils.lua
-
-
-**Examples**
-
-None yet
-
+The modules are released under the [MIT License](LICENSE).
