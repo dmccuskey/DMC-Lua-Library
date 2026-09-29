@@ -25,7 +25,7 @@ module_config = {
 			"lua_megaphone.lua",
 			"lua_objects.lua",
 			"lua_patch.lua",
-			#"lua_path.lua",
+			"lua_path.lua",
 			"lua_promise.lua",
 			"lua_states_mix.lua",
 			"lua_utils.lua"
@@ -42,7 +42,7 @@ module_config = {
 			"lua-megaphone",
 			"lua-objects",
 			"lua-patch",
-			#"lua-path",
+			"lua-path",
 			"lua-promise",
 			"lua-states-mixin",
 			"lua-utils"
