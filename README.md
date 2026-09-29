@@ -111,12 +111,11 @@ Load each module under one name only. Loaded as both `lib.dmc_lua.lua_class` and
 
 ## Known Issues
 
-- **The tests in `spec/` are left over from 2015**: `lua_e4x_spec.lua` and `lua_files_spec.lua` pass, but `bytearray_spec.lua` and `lua_states_spec.lua` load modules that no longer exist, and `lua_bytearray_spec.lua` tests an older API. The current tests are in each module's repository.
 - The `Snakefile` names a `lua_path` module, commented out: there is no lua-path repository. Path handling for Solar2D is in [dmc-path](https://github.com/dmccuskey/dmc-path).
 
 ## Development
 
-Nothing in `dmc_lua/` is edited here: fix a module in its own repository, then rebuild. The build uses [Snakemake](https://snakemake.readthedocs.io/) (last run with 7.32). The `Snakefile` lists the files and the repositories they come from, `snakemake/Snakefile` holds the rules, and each module repository registers its files in its own `Snakefile`.
+Nothing in `dmc_lua/` is edited here: fix a module in its own repository, then rebuild. The tests are there too, in each module's repository. The build uses [Snakemake](https://snakemake.readthedocs.io/) (last run with 7.32). The `Snakefile` lists the files and the repositories they come from, `snakemake/Snakefile` holds the rules, and each module repository registers its files in its own `Snakefile`.
 
 A build copies from checkouts of the module repositories next to this one (`../lua-class/` and so on), on whatever branch each one has checked out. From this repository's root folder:
 
