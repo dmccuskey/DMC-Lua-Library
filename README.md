@@ -20,6 +20,7 @@ Everything is in `dmc_lua/`. Each module's repository has its Quick Start, refer
 | `lua_bytearray` | [lua-bytearray](https://github.com/dmccuskey/lua-bytearray) | A byte buffer for binary data; reading and writing numbers needs the `pack` C module (lpack) |
 | `lua_e4x` | [lua-e4x](https://github.com/dmccuskey/lua-e4x) | Read XML with dot syntax: `xml.book.title` |
 | `lua_files` | [lua-files](https://github.com/dmccuskey/lua-files) | Read and write text, lines, JSON and config files in one call each; uses `lfs` and a JSON module when they are installed |
+| `lua_path` | [lua-path](https://github.com/dmccuskey/lua-path) | Break file paths and `require` strings into their parts, and build them back |
 | `lua_patch` | [lua-patch](https://github.com/dmccuskey/lua-patch) | Python-style additions: `%` string formatting, `table.pop()`, `pnotice()`/`pwarn()` |
 | `lua_utils` | [lua-utils](https://github.com/dmccuskey/lua-utils) | Small helpers for tables, strings, URLs, callbacks, time and image scaling |
 | `json` | [lua-json-shim](https://github.com/dmccuskey/lua-json-shim) | Loads whichever JSON module is installed (`dkjson`, `cjson` or `json`) as `json` |
@@ -105,13 +106,9 @@ To update, pull the repository again (`git -C DMC-Lua-Library pull`).
 
 Every DMC Solar2D library (`dmc-*`) ships this folder as `dmc_corona/lib/dmc_lua/`; [dmc-corona-boot](https://github.com/dmccuskey/dmc-corona-boot) adds it to the search path, and the libraries require the modules as `lib.dmc_lua.<module>`.
 
-Most modules also have a Solar2D package, which loads the module and documents its use in Solar2D: [dmc-objects](https://github.com/dmccuskey/dmc-objects) (which adds classes for display objects), [dmc-events-mixin](https://github.com/dmccuskey/dmc-events-mixin), [dmc-states-mixin](https://github.com/dmccuskey/dmc-states-mixin), [dmc-error](https://github.com/dmccuskey/dmc-error), [dmc-promise](https://github.com/dmccuskey/dmc-promise), [dmc-megaphone](https://github.com/dmccuskey/dmc-megaphone), [dmc-bytearray](https://github.com/dmccuskey/dmc-bytearray), [dmc-e4x](https://github.com/dmccuskey/dmc-e4x), [dmc-files](https://github.com/dmccuskey/dmc-files), [dmc-patch](https://github.com/dmccuskey/dmc-patch) and [dmc-utils](https://github.com/dmccuskey/dmc-utils) (which adds Solar2D helpers).
+Most modules also have a Solar2D package, which loads the module and documents its use in Solar2D: [dmc-objects](https://github.com/dmccuskey/dmc-objects) (which adds classes for display objects), [dmc-events-mixin](https://github.com/dmccuskey/dmc-events-mixin), [dmc-states-mixin](https://github.com/dmccuskey/dmc-states-mixin), [dmc-error](https://github.com/dmccuskey/dmc-error), [dmc-promise](https://github.com/dmccuskey/dmc-promise), [dmc-megaphone](https://github.com/dmccuskey/dmc-megaphone), [dmc-bytearray](https://github.com/dmccuskey/dmc-bytearray), [dmc-e4x](https://github.com/dmccuskey/dmc-e4x), [dmc-files](https://github.com/dmccuskey/dmc-files), [dmc-patch](https://github.com/dmccuskey/dmc-patch) and [dmc-utils](https://github.com/dmccuskey/dmc-utils) (which adds Solar2D helpers). For paths in a Solar2D project, see [dmc-path](https://github.com/dmccuskey/dmc-path).
 
 Load each module under one name only. Loaded as both `lib.dmc_lua.lua_class` and `lua_class`, a module exists twice: there are two megaphones, and objects made from one copy of a class fail `isa()` checks against the other.
-
-## Known Issues
-
-- The `Snakefile` names a `lua_path` module, commented out: there is no lua-path repository. Path handling for Solar2D is in [dmc-path](https://github.com/dmccuskey/dmc-path).
 
 ## Development
 
