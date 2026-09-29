@@ -47,11 +47,6 @@ module_config = {
 			"lua-states-mixin",
 			"lua-utils"
 		]
-	},
-	"tests": {
-		"dir": "spec",
-		"files": [],
-		"requires": []
 	}
 }
 
